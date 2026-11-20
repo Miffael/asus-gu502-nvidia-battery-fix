@@ -19,15 +19,15 @@ mod util;
 use config::{Config, config_path, log_path};
 use ghelper::ModeWatcher;
 use policy::{Command, Mode, SvcState, command, desired};
-use services::{Scm, describe, wide};
-use std::ptr::{null, null_mut};
+use services::{Scm, describe};
+use std::ptr::null_mut;
 use std::time::SystemTime;
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 use util::{GREEN, GREY, ORANGE, icon_rgba, log, single_instance};
-use windows_sys::Win32::UI::Shell::ShellExecuteW;
+use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, GetMessageW, KillTimer, MSG, SW_SHOWNORMAL, SetTimer, TranslateMessage, WM_TIMER,
+    DispatchMessageW, GetMessageW, KillTimer, MSG, SetTimer, TranslateMessage, WM_TIMER,
 };
 
 /// (service name, short name for tooltip, menu label)
@@ -74,11 +74,25 @@ fn file_mtime(p: &std::path::Path) -> Option<SystemTime> {
     std::fs::metadata(p).and_then(|m| m.modified()).ok()
 }
 
+/// Opens a file in Notepad. The app runs elevated, so Notepad is started by its absolute
+/// path from GetSystemDirectoryW — never resolved via PATH, App Paths (HKCU) or %windir%,
+/// which a non-admin process could redirect to its own exe.
 fn open_in_notepad(path: &std::path::Path) {
-    let op = wide("open");
-    let exe = wide("notepad.exe");
-    let arg = wide(&format!("\"{}\"", path.display()));
-    unsafe { ShellExecuteW(null_mut(), op.as_ptr(), exe.as_ptr(), arg.as_ptr(), null(), SW_SHOWNORMAL) };
+    match system_dir() {
+        Some(dir) => {
+            if let Err(e) = std::process::Command::new(dir.join("notepad.exe")).arg(path).spawn() {
+                log(&format!("не удалось открыть Блокнот: {e}"));
+            }
+        }
+        None => log("не удалось определить системную папку для Блокнота"),
+    }
+}
+
+fn system_dir() -> Option<std::path::PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    let mut buf = [0u16; 260];
+    let n = unsafe { GetSystemDirectoryW(buf.as_mut_ptr(), buf.len() as u32) } as usize;
+    (n > 0 && n < buf.len()).then(|| std::ffi::OsString::from_wide(&buf[..n]).into())
 }
 
 fn make_icon(color: [u8; 3]) -> Icon {

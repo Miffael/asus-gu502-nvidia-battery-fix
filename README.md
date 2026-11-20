@@ -155,7 +155,20 @@ Code layout:
 | `src/services.rs` | minimal Service Control Manager wrapper (`windows-sys`) |
 | `src/ghelper.rs` | reads `performance_mode` from G-Helper's config, mtime-cached |
 | `src/config.rs` | settings file, paths |
-| `src/util.rs` | log with rotation, single-instance mutex, generated tray icon |
+| `src/util.rs` | log with rotation, safe file writes, single-instance mutex, generated tray icon |
+
+## Security notes
+
+The app runs **elevated** (it has to, to control services), so it is written to avoid becoming a
+privilege-escalation path for non-admin processes of the same user:
+
+- The binary lives in `C:\Program Files\nv-service-tray\` (writable only by admins); the scheduled task points there.
+- Settings and log live in the user profile, which non-admin processes can modify. All writes refuse paths that go
+  through a symlink/junction or hit a file with multiple hard links, so they can't be redirected into protected
+  locations. Settings are only parsed as JSON; at worst a tampered file changes the policy for the two NVIDIA services.
+- Notepad (for "open log/settings") is started by its absolute path from `GetSystemDirectoryW`, not via
+  `PATH`, *App Paths* or `%windir%`, which are user-controllable.
+- No network access, no telemetry, no secrets stored.
 
 ## Related tips for the same laptop
 
@@ -168,14 +181,6 @@ Code layout:
   'D' + ([BitConverter]::ToUInt32($d, 4) - 1)   # D0 = awake, D3 = asleep
   ```
 - WSL2 with GPU passthrough keeps the dGPU awake — `wsl --shutdown` when you don't need it.
-
-## Кратко по-русски
-
-Трей-приложение для ноутбуков с NVIDIA Optimus и G-Helper. В режимах Silent и Balanced оно останавливает службы
-`NVDisplay.ContainerLocalSystem` (будила RTX каждые 20–60 с) и `NvContainerLocalSystem` (NVIDIA App: оверлей, запись,
-телеметрия), чтобы дискретная видеокарта спала. В Turbo ничего не трогает. В меню трея два тумблера для ручного
-включения служб (действуют до следующей смены режима). Игры работают без этих служб, видеокарта просыпается сама.
-На GU502GV разряд батареи упал примерно с 32 до 14 Вт.
 
 ## License
 
