@@ -1,0 +1,28 @@
+[package]
+name = "nv-service-tray"
+version = "0.1.0"
+edition = "2024"
+description = "Tray app: stops NVIDIA background services in quiet G-Helper modes so the dGPU can sleep"
+license = "MIT"
+repository = "https://github.com/Miffael/asus-gu502-nvidia-battery-fix"
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tray-icon = "0.26.1"
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Services",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
